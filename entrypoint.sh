@@ -35,4 +35,4 @@ echo "Đang lắng nghe trên Port: $SERVER_PORT"
 echo "Truy cập: http://<IP_SERVER>:$SERVER_PORT"
 echo "---------------------------------------------------"
 
-websockify --web=/usr/share/novnc/ --cert=/self.pem --vnc localhost:5901 --listen 0.0.0.0:$SERVER_PORT 
+websockify --web=/usr/share/novnc/ --cert=/self.pem $SERVER_PORT localhost:5901
