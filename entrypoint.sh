@@ -1,39 +1,38 @@
 #!/bin/bash
 
-# Định nghĩa lại thư mục Home cho chắc chắn
-export HOME=/home/container
-cd /home/container
-
-# 1. Lấy mật khẩu từ Server ID
+# 1. Cấu hình biến môi trường
+export HOME=/tmp
+export DISPLAY=:1
 VNC_PASS=$(echo "$HOSTNAME" | sed 's+-.*++g' | cut -c1-8)
 
-# 2. Tạo thư mục cấu hình trong /home/container
-mkdir -p /home/container/.vnc
-echo "$VNC_PASS" | vncpasswd -f > /home/container/.vnc/passwd
-chmod 600 /home/container/.vnc/passwd
+# 2. Tạo thư mục cấu hình VNC trong /tmp
+mkdir -p /tmp/.vnc
 
-# 3. Tạo file xstartup
-cat <<EOF > /home/container/.vnc/xstartup
+# Thiết lập mật khẩu
+echo "$VNC_PASS" | vncpasswd -f > /tmp/.vnc/passwd
+chmod 600 /tmp/.vnc/passwd
+
+# Tạo file chạy XFCE4
+cat <<EOF > /tmp/.vnc/xstartup
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
-dbus-launch --exit-with-session xfce4-session &
+exec startxfce4
 EOF
-chmod +x /home/container/.vnc/xstartup
+chmod +x /tmp/.vnc/xstartup
 
-# 4. Dọn dẹp lock file cũ
+# 3. Dọn dẹp file cũ để tránh lỗi "A VNC server is already running"
 rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
 
-# 5. Khởi động VNC (Bỏ qua Netdata và SSH vì Pterodactyl thường chặn các dịch vụ này nếu không có quyền root)
-# Chạy VNC trên port 5901
-vncserver :1 -localhost no -geometry 1920x1080 -depth 24 -rfbauth /home/container/.vnc/passwd
+# 4. Khởi động VNC Server
+# Sử dụng -rfbauth trỏ trực tiếp vào file mật khẩu ở /tmp
+vncserver :1 -localhost no -geometry 1280x720 -depth 24 -rfbauth /tmp/.vnc/passwd
 
-# 6. Khởi động Websockify (noVNC)
-# Vì /usr/share/novnc là read-only, chúng ta trỏ web trực tiếp tới thư mục cài đặt
 echo "---------------------------------------------------"
-echo "VNC Password: $VNC_PASS"
-echo "Đang chạy trên Port: $SERVER_PORT"
+echo "Mật khẩu VNC là: $VNC_PASS"
+echo "Đang chạy Websockify trên Port: $SERVER_PORT"
 echo "---------------------------------------------------"
 
-# Chạy websockify không cần SSL để tránh lỗi Permission khi tạo file .pem
+# 5. Khởi động noVNC (Websockify)
+# Trỏ trực tiếp localhost:5901 (VNC) ra SERVER_PORT (Panel)
 websockify --web=/usr/share/novnc/ $SERVER_PORT localhost:5901
