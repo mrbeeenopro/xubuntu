@@ -1,38 +1,39 @@
 #!/bin/bash
 
-# Vnc password
+# Định nghĩa lại thư mục Home cho chắc chắn
+export HOME=/home/container
+cd /home/container
+
+# 1. Lấy mật khẩu từ Server ID
 VNC_PASS=$(echo "$HOSTNAME" | sed 's+-.*++g' | cut -c1-8)
 
-# 2. vnc password for root
-mkdir -p /root/.vnc
-echo "$VNC_PASS" | vncpasswd -f > /root/.vnc/passwd
-chmod 600 /root/.vnc/passwd
+# 2. Tạo thư mục cấu hình trong /home/container
+mkdir -p /home/container/.vnc
+echo "$VNC_PASS" | vncpasswd -f > /home/container/.vnc/passwd
+chmod 600 /home/container/.vnc/passwd
 
-# 3. Xstartup
-cat <<EOF > /root/.vnc/xstartup
+# 3. Tạo file xstartup
+cat <<EOF > /home/container/.vnc/xstartup
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 dbus-launch --exit-with-session xfce4-session &
 EOF
-chmod +x /root/.vnc/xstartup
+chmod +x /home/container/.vnc/xstartup
 
-echo "<!DOCTYPE html><html><head><title>VNC</title><script>window.location.replace('vnc.html?autoconnect=1&resize=scale&password=$VNC_PASS');</script></head></html>" > /usr/share/novnc/index.html
-
+# 4. Dọn dẹp lock file cũ
 rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
 
-/usr/sbin/sshd &
-/usr/sbin/netdata &
+# 5. Khởi động VNC (Bỏ qua Netdata và SSH vì Pterodactyl thường chặn các dịch vụ này nếu không có quyền root)
+# Chạy VNC trên port 5901
+vncserver :1 -localhost no -geometry 1920x1080 -depth 24 -rfbauth /home/container/.vnc/passwd
 
-vncserver :1 -localhost no -geometry 1920x1080 -depth 24
-
-openssl req -new -subj "/C=VN" -x509 -days 365 -nodes -out /self.pem -keyout /self.pem 2>/dev/null
-
+# 6. Khởi động Websockify (noVNC)
+# Vì /usr/share/novnc là read-only, chúng ta trỏ web trực tiếp tới thư mục cài đặt
 echo "---------------------------------------------------"
-echo "Server ID: $HOSTNAME"
-echo "VNC Password (8 ký tự đầu): $VNC_PASS"
-echo "Đang lắng nghe trên Port: $SERVER_PORT"
-echo "Truy cập: http://<IP_SERVER>:$SERVER_PORT"
+echo "VNC Password: $VNC_PASS"
+echo "Đang chạy trên Port: $SERVER_PORT"
 echo "---------------------------------------------------"
 
-websockify --web=/usr/share/novnc/ --cert=/self.pem $SERVER_PORT localhost:5901
+# Chạy websockify không cần SSL để tránh lỗi Permission khi tạo file .pem
+websockify --web=/usr/share/novnc/ $SERVER_PORT localhost:5901
