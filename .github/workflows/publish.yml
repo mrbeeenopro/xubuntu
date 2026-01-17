@@ -1,29 +1,36 @@
 name: Build and Publish Docker Image
 
-# main action
+# Kích hoạt khi có hành động push code lên nhánh 'main'
 on:
   push:
     branches: [ "main" ]
+    # Chỉ chạy khi các file quan trọng thay đổi (tuỳ chọn)
     paths:
       - 'Dockerfile'
       - 'entrypoint.sh'
       - '.github/workflows/publish.yml'
 
+# Định nghĩa các biến môi trường
 env:
   REGISTRY: ghcr.io
+  # Tên ảnh sẽ tự động lấy theo tên repo GitHub (ví dụ: user/repo)
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Cấp quyền đọc code và quyền ghi gói tin (để đẩy ảnh lên)
     permissions:
       contents: read
       packages: write
 
     steps:
+      # Bước 1: Tải code từ kho lưu trữ về máy chủ build
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Bước 2: Đăng nhập vào GitHub Container Registry (GHCR)
+      # Sử dụng GITHUB_TOKEN tự động, không cần cấu hình thủ công
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -31,17 +38,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Bước 3: Xử lý metadata cho ảnh (tạo tag 'latest', xử lý chữ thường)
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Gán tag 'latest' nếu push lên nhánh mặc định
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Bước 4: Tiến hành Build và Push ảnh lên
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
